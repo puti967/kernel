@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>pstack 卡片关系</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f7fafc; color: #1c2430; font-family: "Segoe UI", "PingFang SC", sans-serif; }
+  header { position: sticky; top: 0; z-index: 6; display: flex; gap: 16px; align-items: center; padding: 10px 16px; background: #16324f; color: white; }
+  header h1 { margin: 0; font-size: 16px; }
+  input { margin-left: auto; width: 260px; border: 0; padding: 8px 10px; }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+  #legend { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; padding: 14px 22px 12px; background: #f7f9fb; border-bottom: 1px solid #e4ebf1; }
+  #board-title { display: flex; align-items: center; gap: 10px; padding: 18px 22px 6px; background: #f7fafc; }
+  #board-title i { width: 12px; height: 12px; border-radius: 50%; background: #1aa3a8; flex: none; }
+  #board-title h1 { margin: 0; font-family: "Segoe UI", "PingFang SC", "Helvetica Neue", sans-serif; font-size: 28px; font-weight: 700; line-height: 1.2; color: #1a2744; letter-spacing: .01em; }
+  .legend-item { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: #5d6d7e; font: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
+  .legend-item:hover, .legend-item.is-on { color: #243040; }
+  .legend-item.is-on .legend-swatch { box-shadow: 0 0 0 2px #f7f9fb, 0 0 0 3.5px var(--accent); }
+  .legend-swatch { width: 28px; height: 14px; border-radius: 3px; border: 1.5px solid var(--accent); background: var(--wash); }
+  #column-frame { position: absolute; z-index: 0; border: 2px dashed var(--ink, #5c6b7a); border-radius: 26px; background: color-mix(in srgb, var(--wash, #f4f7fb) 46%, transparent); pointer-events: none; }
+  #column-frame span { position: absolute; top: 8px; left: 16px; color: var(--ink, #5c6b7a); font-size: 13px; font-weight: 700; }
+  #viewport { flex: 1; overflow: auto; user-select: none; -webkit-user-select: none; background: #f7fafc; }
+  #stage { position: relative; }
+  #canvas { position: relative; transform-origin: 0 0; background-color: #f7fafc; background-image: linear-gradient(#e4eef6 1px, transparent 1px), linear-gradient(90deg, #e4eef6 1px, transparent 1px); background-size: 40px 40px; }
+  svg.links { position: absolute; inset: 0; pointer-events: none; }
+  .rel { fill: none; stroke-width: 2; stroke-linecap: butt; stroke-dasharray: 12 8; }
+  .card { position: absolute; z-index: 1; width: 240px; min-width: 240px; max-width: 360px; min-height: 92px; background: var(--wash, #f4f7fb); border: 1px solid var(--line, #e6ebf1); border-radius: 18px; cursor: pointer; overflow: visible; box-shadow: inset 0 3px 0 var(--accent, #d5dde6), 0 8px 18px rgba(48, 62, 78, .05); }
+  .step { position: absolute; left: 12px; top: -12px; z-index: 4; height: 24px; padding: 0 9px; border-radius: 12px; color: #fff; font-size: 12px; font-weight: 700; line-height: 24px; letter-spacing: .02em; white-space: nowrap; box-shadow: 0 0 0 2px #fff, 0 6px 14px rgba(28, 36, 48, .14); }
+  .step.start { height: 26px; line-height: 26px; font-size: 13px; top: -14px; }
+  .next { margin: -4px 16px 12px; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card.is-start::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 4px; border-radius: 4px; background: var(--step, #e24b1a); }
+  .read { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .card.dim { box-shadow: 4px 6px 12px #d5dee8; }
+  .card header { position: relative; background: transparent; color: var(--ink, #16324f); padding: 14px 16px 0; font-size: 15px; font-weight: 700; white-space: normal; overflow-wrap: anywhere; }
+  .chips { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; }
+  .chips button { width: 9px; height: 9px; border: 0; border-radius: 50%; padding: 0; cursor: pointer; }
+
+  .card p { margin: 0; padding: 8px 16px 14px; font-size: 13px; line-height: 1.45; color: #526173; white-space: normal; overflow-wrap: anywhere; }
+  #card-tip { position: fixed; z-index: 7; display: none; width: max-content; max-width: 280px; padding: 12px 14px; background: #fff; color: #3d4c5c; border-radius: 16px; box-shadow: 0 12px 28px rgba(36, 48, 64, .14); font-size: 13px; line-height: 1.5; pointer-events: none; }
+  #card-tip.show { display: block; }
+  #card-tip strong { display: block; margin-bottom: 4px; color: #243040; font-size: 14px; overflow-wrap: anywhere; }
+  #card-tip span { display: block; overflow-wrap: anywhere; }
+  #card-tip::after { content: ""; position: absolute; top: 18px; border: 7px solid transparent; }
+  #card-tip[data-place="right"]::after { left: -13px; border-right-color: #fff; }
+  #card-tip[data-place="left"]::after { right: -13px; border-left-color: #fff; }
+  #card-tip[data-place="above"]::after { top: auto; bottom: -13px; left: 22px; border-top-color: #fff; }
+  #card-tip[data-place="below"]::after { top: -13px; left: 22px; border-bottom-color: #fff; }
+  .card.is-on { outline: 3px solid; z-index: 2; }
+  .card.is-next { outline: 2px dashed; outline-offset: 4px; z-index: 2; }
+  .card.dim, .card.mode-dim { opacity: .22; filter: grayscale(1); }
+  .rel.dim { stroke: #d5dee8 !important; opacity: .22; }
+
+  #dock { position: fixed; right: 20px; bottom: 20px; z-index: 7; display: flex; align-items: center; gap: 2px; padding: 8px 10px; background: #fff; border-radius: 14px; box-shadow: 0 8px 24px rgba(28, 42, 64, .12); color: #647488; font-size: 14px; }
+  #dock button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }
+  #dock button.is-on { color: #1aa3a8; font-weight: 700; }
+  #dock button:hover { color: #243040; }
+  #dock button.is-on:hover { color: #1aa3a8; }
+  #dock svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #dock .sep { width: 1px; height: 16px; margin: 0 6px; background: #e1e7ee; }
+  #zoom-label { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+  #dock-pop { position: fixed; right: 20px; bottom: 68px; z-index: 7; display: none; width: 260px; padding: 12px; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(28, 42, 64, .12); color: #526173; font-size: 13px; line-height: 1.5; }
+  #radar { position: fixed; right: 20px; bottom: 84px; z-index: 7; display: none; width: 240px; padding: 10px 10px 6px; background: #f8fbfd; border: 2px solid #7eb8cc; border-radius: 16px; box-shadow: 0 12px 28px rgba(36, 72, 96, .12); }
+  #radar.open { display: block; }
+  #radar-map { position: relative; height: 120px; border-radius: 10px; overflow: hidden; background-color: #f4f9fc; background-image: linear-gradient(#e3eef4 1px, transparent 1px), linear-gradient(90deg, #e3eef4 1px, transparent 1px); background-size: 18px 18px; cursor: grab; }
+  #radar-map:active { cursor: grabbing; }
+  .radar-node { position: absolute; min-width: 8px; min-height: 5px; border-radius: 3px; border: 0; padding: 0; cursor: pointer; }
+  #radar-view { position: absolute; border: 2px solid #2aa0c4; border-radius: 6px; background: rgba(42, 160, 196, .08); pointer-events: none; }
+  .radar-foot { display: flex; justify-content: space-between; padding: 8px 4px 2px; color: #8aa0b0; font-size: 13px; }
+  #dock-pop.open { display: block; }
+  #q { width: 100%; border: 1px solid #e1e7ee; border-radius: 8px; padding: 8px 10px; font: inherit; }
+  #popup { position: fixed; inset: 0; background: rgba(17, 17, 17, .28); display: none; align-items: center; justify-content: center; z-index: 8; }
+  #popup.open { display: flex; }
+  #popup .frame { position: relative; width: min(980px, 94vw); max-height: 88vh; background: #fff; }
+  #popup .page { position: relative; display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); gap: 36px; width: 100%; max-height: 88vh; overflow-x: hidden; overflow-y: auto; background: #fff; color: #222; padding: 40px 36px; font-family: "Songti SC", serif; scrollbar-width: none; }
+  #popup .page::-webkit-scrollbar { width: 0; height: 0; }
+  #pop-bar { position: absolute; top: 0; right: 2px; width: 4px; border-radius: 4px; background: rgba(0, 0, 0, .28); opacity: 0; pointer-events: none; }
+  #popup aside { position: sticky; top: 0; color: #666; font-size: 13px; }
+  #pop-x { display: block; width: auto; height: auto; margin: 0 0 12px; padding: 0; border: none; outline: none; box-shadow: none; background: none; color: #9aa3af; cursor: pointer; font-size: 28px; line-height: 1; opacity: 0; appearance: none; }
+  #popup .page:hover #pop-x { opacity: 1; }
+  #pop-kind { color: #666; }
+  #pop-name { display: block; color: #111; font-size: 28px; margin: 8px 0; }
+  #pop-path, #pop-blurb, #pop-when { display: block; margin: 0 0 8px; color: #666; }
+  #pop-path { word-break: break-all; }
+  #pop-next .jump { display: block; width: auto; margin: 8px 0 0; padding: 0; border: 0; background: none; color: #666; text-align: left; cursor: pointer; font: inherit; }
+  #pop-close { margin-top: 16px; border: none; background: none; color: #9aa3af; cursor: pointer; padding: 0; }
+  #pop-body { font-size: 19px; line-height: 1.75; }
+  #pop-body h1 { font-size: 40px; margin-top: 0; }
+  #pop-body { min-width: 0; }
+  #pop-body pre { background: #eee; padding: 12px 14px; max-width: 100%; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+  #pop-body code { font-family: ui-monospace, monospace; font-size: .86em; }
+  #pop-body pre code { background: none; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+  #popup #pop-x, #popup #pop-close { border: none; background: none; box-shadow: none; color: #9aa3af; }
+
+  #detail h2 { margin: 0 0 8px; font-size: 20px; }
+  button.jump, header button { border: 1px solid #d5dde6; background: white; color: #16324f; padding: 6px 10px; cursor: pointer; }
+  button.jump { display: block; width: 100%; margin-top: 8px; text-align: left; }
+</style>
+</head>
+<body>
+<div id="popup">
+  <div class="frame">
+  <div class="page">
+    <aside>
+      <button type="button" id="pop-x" aria-label="关闭">×</button>
+      <div id="pop-kind"></div>
+      <h2 id="pop-name"></h2>
+      <p class="path" id="pop-path"></p>
+      <p id="pop-blurb"></p>
+      <p id="pop-when"></p>
+      <div id="pop-next"></div>
+      <button type="button" id="pop-close">关闭</button>
+    </aside>
+    <article id="pop-body"></article>
+  </div>
+  <div id="pop-bar"></div>
+  </div>
+</div>
+<div id="card-tip" data-place="right"><strong></strong><span></span></div>
+<div id="dock-pop"><input id="q" type="search" placeholder="搜索"></div>
+<div id="radar">
+  <div id="radar-map"><div id="radar-view"></div></div>
+  <div class="radar-foot"><span>点击节点</span><span>拖动平移</span></div>
+</div>
+<div id="dock">
+  <button type="button" data-mode="path">路径</button>
+  <button type="button" data-mode="map">地图</button>
+  <button type="button" id="dock-search" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/></svg></button>
+  <button type="button" id="dock-help" aria-label="Help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .8-1 1.7"/><path d="M12 17h.01"/></svg></button>
+  <button type="button" id="dock-restore" aria-label="Restore"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/></svg></button>
+  <span class="sep"></span>
+  <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+  <span id="zoom-label">100%</span>
+  <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+</div>
+<div class="app">
+  <div id="legend"></div>
+  <div id="board-title"><i></i><h1>Kernel</h1></div>
+  <div id="viewport"><div id="stage"><div id="canvas"><svg class="links"></svg></div></div></div>
+</div>
+<script src="atlas-data.js"></script>
+<script>
+const byId = Object.fromEntries(ATLAS.nodes.map((n) => [n.id, n]));
+const canvas = document.getElementById("canvas");
+const svg = canvas.querySelector("svg");
+const fallbackCols = ["文档", "根目录", "自动化", "命令", "剧本", "智能体", "仓外", "原则", "状态图案例"];
+const cols = Array.isArray(ATLAS.columns) && ATLAS.columns.length ? ATLAS.columns.map((column) => column.id) : fallbackCols;
+const columnCopy = {
+  "文档": "按编号读，知道后面的命令做什么。",
+  "根目录": "仓库根上的文件，不是技能。",
+  "自动化": "夜里在云端自己跑的流程。",
+  "命令": "输入斜杠就会调用的技能。",
+  "剧本": "由工作方式按任务选中的做法。",
+  "智能体": "被派出去干活的工人。",
+  "仓外": "不在这个仓库里、仍会被用到的工具。",
+  "原则": "做决定时要守的约束，不是命令。",
+  "状态图案例": "状态图技能用来对照的例子。"
+};
+if (Array.isArray(ATLAS.columns)) ATLAS.columns.forEach((column) => { columnCopy[column.id] = column.blurb || columnCopy[column.id] || ""; });
+const tones = {
+  "文档": { wash: "#f8f1e8", ink: "#6a5344", line: "#eadfce", accent: "#c4a484" },
+  "根目录": { wash: "#eef2f6", ink: "#45586a", line: "#d5e0ea", accent: "#8aa3b8" },
+  "自动化": { wash: "#f4eef6", ink: "#5c4d68", line: "#e6dce9", accent: "#b7a4c4" },
+  "命令": { wash: "#eef4ef", ink: "#3f5c49", line: "#d7e6da", accent: "#9bb8a4" },
+  "剧本": { wash: "#eef3f8", ink: "#3e5570", line: "#d7e3ee", accent: "#9bb0c8" },
+  "智能体": { wash: "#f8f0ea", ink: "#6a4e42", line: "#eadfd6", accent: "#d0b2a4" },
+  "仓外": { wash: "#eef6f4", ink: "#3e5c58", line: "#d5e8e4", accent: "#9ec4be" },
+  "原则": { wash: "#f6f3ea", ink: "#5e5644", line: "#e7e1d2", accent: "#c9bea4" },
+  "状态图案例": { wash: "#f6eef1", ink: "#644854", line: "#e8dbe1", accent: "#c9aab4" }
+};
+if (Array.isArray(ATLAS.columns)) ATLAS.columns.forEach((column) => { if (column.wash) tones[column.id] = { wash: column.wash, ink: column.ink, line: column.line, accent: column.accent }; });
+document.querySelector("#board-title h1").textContent = ATLAS.title || document.querySelector("#board-title h1").textContent;
+const colX = {};
+cols.forEach((kind, i) => { colX[kind] = 40 + i * 420; });
+const padX = Math.max(2400, document.getElementById("viewport").clientWidth || 0);
+const padY = 0;
+let focusedKind = null;
+const colY = Object.fromEntries(cols.map((kind) => [kind, 28]));
+const cards = {};
+
+ATLAS.nodes.forEach((node) => {
+  const el = document.createElement("article");
+  el.className = "card";
+  el.dataset.id = node.id;
+  const tone = tones[node.kind] || tones["根目录"];
+  el.style.setProperty("--wash", tone.wash);
+  el.style.setProperty("--ink", tone.ink);
+  el.style.setProperty("--line", tone.line);
+  el.style.setProperty("--accent", tone.accent);
+  el.style.left = (padX + colX[node.kind]) + "px";
+  el.style.top = colY[node.kind] + "px";
+  const preview = previewText(node);
+  const header = document.createElement("header");
+  header.textContent = preview.name;
+  el.appendChild(header);
+  if (preview.blurb) {
+    const blurb = document.createElement("p");
+    blurb.textContent = preview.blurb;
+    el.appendChild(blurb);
+  }
+  el.dataset.truncated = preview.truncated ? "1" : "0";
+  canvas.appendChild(el);
+  fitCard(el, preview.truncated);
+  el.dataset.homeX = el.style.left;
+  el.dataset.homeY = el.style.top;
+  cards[node.id] = el;
+});
+const width = padX + Math.max(...Object.values(colX)) + 480 + padX;
+const height = padY + Math.max(...Object.values(colY)) + padY;
+canvas.style.width = width + "px";
+canvas.style.height = height + "px";
+const legend = document.getElementById("legend");
+cols.forEach((kind) => {
+  const tone = tones[kind];
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = "legend-item";
+  item.title = columnCopy[kind];
+  const swatch = document.createElement("i");
+  swatch.className = "legend-swatch";
+  swatch.style.setProperty("--wash", tone.wash);
+  swatch.style.setProperty("--accent", tone.accent);
+  item.append(swatch, document.createTextNode(kind));
+  item.dataset.kind = kind;
+  item.addEventListener("click", () => locateColumn(kind));
+  legend.appendChild(item);
+});
+svg.setAttribute("width", width);
+svg.setAttribute("height", height);
+function chars(text) {
+  return Array.from(text || "");
+}
+function previewText(node) {
+  const name = node.name || "";
+  const blurb = node.blurb || "";
+  if (chars(name).length + chars(blurb).length <= 50) return { name, blurb, truncated: false };
+  const nameChars = chars(name);
+  if (nameChars.length >= 50) return { name: nameChars.slice(0, 49).join("") + "…", blurb: "", truncated: true };
+  const room = 50 - nameChars.length;
+  return { name, blurb: chars(blurb).slice(0, Math.max(0, room - 1)).join("") + "…", truncated: true };
+}
+function fitCard(el, truncated) {
+  el.style.width = "240px";
+  if (truncated) return;
+  const header = el.querySelector("header");
+  const range = document.createRange();
+  range.selectNodeContents(header);
+  const needed = Math.ceil(range.getBoundingClientRect().width) + 32;
+  if (needed > 240) el.style.width = Math.min(360, needed) + "px";
+}
+function activeCols() {
+  const present = new Set(ATLAS.nodes.map((node) => node.kind));
+  return cols.filter((kind) => present.has(kind)).concat([...present].filter((kind) => !cols.includes(kind)));
+}
+function layoutCards() {
+  const used = activeCols();
+  const leftOf = {};
+  let x = 40;
+  used.forEach((kind) => {
+    const widest = Math.max(240, ...ATLAS.nodes.filter((node) => node.kind === kind && cards[node.id]).map((node) => cards[node.id].offsetWidth));
+    leftOf[kind] = x;
+    x += Math.max(400, widest + 80);
+  });
+  const y = Object.fromEntries(used.map((kind) => [kind, 28]));
+  ATLAS.nodes.forEach((node) => {
+    const el = cards[node.id];
+    if (!el || leftOf[node.kind] == null) return;
+    el.style.left = (padX + leftOf[node.kind]) + "px";
+    el.style.top = y[node.kind] + "px";
+    el.dataset.homeX = el.style.left;
+    el.dataset.homeY = el.style.top;
+    y[node.kind] += Math.max(el.offsetHeight, 92) + 32;
+  });
+  const nextHeight = Math.max(68, ...Object.values(y)) + 24;
+  canvas.style.width = (padX + Math.max(40, x - 80) + 40 + padX) + "px";
+  canvas.style.height = nextHeight + "px";
+  svg.setAttribute("width", canvas.style.width);
+  svg.setAttribute("height", nextHeight);
+  syncStage();
+  if (focusedKind) showColumnFrame(focusedKind);
+}
+let zoom = 1;
+function syncStage() {
+  const stage = document.getElementById("stage");
+  if (!stage) return;
+  stage.style.width = (canvas.offsetWidth * zoom) + "px";
+  stage.style.height = (canvas.offsetHeight * zoom) + "px";
+}
+function columnBox(kind) {
+  const members = ATLAS.nodes.filter((node) => node.kind === kind && cards[node.id]).map((node) => cards[node.id]);
+  const left = Math.min(...members.map((el) => parseFloat(el.style.left))) - 20;
+  const right = Math.max(...members.map((el) => parseFloat(el.style.left) + el.offsetWidth)) + 20;
+  const top = Math.min(...members.map((el) => parseFloat(el.style.top))) - 28;
+  const bottom = Math.max(...members.map((el) => parseFloat(el.style.top) + el.offsetHeight)) + 20;
+  return { left, top, width: right - left, height: bottom - top };
+}
+function clearColumnFrame() {
+  focusedKind = null;
+  const frame = document.getElementById("column-frame");
+  if (frame) frame.remove();
+  document.querySelectorAll(".legend-item.is-on").forEach((item) => item.classList.remove("is-on"));
+}
+function showColumnFrame(kind) {
+  const box = columnBox(kind);
+  const tone = tones[kind];
+  let frame = document.getElementById("column-frame");
+  if (!frame) {
+    frame = document.createElement("div");
+    frame.id = "column-frame";
+    frame.appendChild(document.createElement("span"));
+    canvas.appendChild(frame);
+  }
+  frame.style.left = box.left + "px";
+  frame.style.top = box.top + "px";
+  frame.style.width = box.width + "px";
+  frame.style.height = box.height + "px";
+  frame.style.setProperty("--ink", tone.ink);
+  frame.style.setProperty("--wash", tone.wash);
+  frame.querySelector("span").textContent = kind;
+  document.querySelectorAll(".legend-item").forEach((item) => {
+    item.classList.toggle("is-on", item.dataset.kind === kind);
+  });
+}
+function locateColumn(kind) {
+  focusedKind = kind;
+  showColumnFrame(kind);
+  const box = columnBox(kind);
+  const view = document.getElementById("viewport");
+  view.scrollTo({
+    left: Math.max(0, box.left * zoom - (view.clientWidth - box.width * zoom) / 2),
+    top: 0,
+    behavior: "smooth"
+  });
+}
+layoutCards();
+document.getElementById("viewport").scrollLeft = padX;
+
+const palette = ["#e24b1a", "#1e4d8c", "#0f8a6a", "#b4236a", "#c47b00", "#5b3cc4", "#0e7490", "#9a3412"];
+function edgeColor(edge, index) {
+  return palette[index % palette.length];
+}
+function point(el, side) {
+  const height = el.offsetHeight || 92;
+  return {
+    x: parseFloat(el.style.left) + (side === "right" ? el.offsetWidth || 240 : 0),
+    y: parseFloat(el.style.top) + height / 2
+  };
+}
+function arrowMarker(color) {
+  const id = "arrow-" + color.replace("#", "");
+  if (!svg.querySelector("#" + id)) {
+    let defs = svg.querySelector("defs");
+    if (!defs) {
+      defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      svg.appendChild(defs);
+    }
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id", id);
+    marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refX", "8");
+    marker.setAttribute("refY", "5");
+    marker.setAttribute("markerWidth", "7");
+    marker.setAttribute("markerHeight", "7");
+    marker.setAttribute("orient", "auto");
+    const head = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    head.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+    head.setAttribute("fill", color);
+    marker.appendChild(head);
+    defs.appendChild(marker);
+  }
+  return id;
+}
+function addLine(d, color, mode) {
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  const id = "flow-" + Math.random().toString(36).slice(2);
+  path.setAttribute("id", id);
+  path.setAttribute("d", d);
+  path.setAttribute("class", mode === "dim" ? "rel dim" : "rel");
+  path.setAttribute("stroke", color);
+  svg.appendChild(path);
+  if (mode === "flow") path.setAttribute("marker-end", "url(#" + arrowMarker(color) + ")");
+  if (mode !== "flow") return;
+  const pill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  pill.setAttribute("width", "22");
+  pill.setAttribute("height", "7");
+  pill.setAttribute("x", "-11");
+  pill.setAttribute("y", "-3.5");
+  pill.setAttribute("rx", "3.5");
+  pill.setAttribute("fill", color);
+  const motion = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+  motion.setAttribute("dur", "6s");
+  motion.setAttribute("repeatCount", "indefinite");
+  motion.setAttribute("rotate", "auto");
+  const mpath = document.createElementNS("http://www.w3.org/2000/svg", "mpath");
+  mpath.setAttribute("href", "#" + id);
+  motion.appendChild(mpath);
+  pill.appendChild(motion);
+  svg.appendChild(pill);
+}
+const fallbackGroups = [
+  ["doc-01", "setup-pstack", "poteto-mode", "poteto-help", "play-feature", "play-prototype", "play-bug-fix", "poteto-agent", "create-verification-skill", "maintain-verification-skill", "principle-prove-it-works", "doc-02", "doc-06", "control-ui"],
+  ["doc-05", "no-comments", "comment-sicko", "how", "why", "teach", "doc-03"],
+  ["architect", "principle-boundary-discipline", "principle-type-system-discipline", "principle-model-the-domain", "correct", "principle-encode-lessons-in-structure", "doc-04"],
+  ["doc-07", "swarm", "arena", "benny-setup", "benny-triage", "benny-fix", "figure-it-out", "play-orchestrate"],
+  ["tdd", "principle-test-behavior-not-implementation"],
+  ["ketchup", "ketchup-video"],
+  ["unslop", "bro", "technical-writing"],
+  ["statechart", "create-formal-verification-skill", "maintain-formal-verification-skill", "case-Login"],
+  ["doc-08"],
+  ["doc-09", "automate-me"],
+  ["play-prototype", "principle-exhaust-the-design-space", "principle-experience-first"]
+];
+const colorGroups = Array.isArray(ATLAS.groups) && ATLAS.groups.length ? ATLAS.groups : fallbackGroups;
+function edgeGroupColor(edge) {
+  const index = colorGroups.findIndex((group) => group.includes(edge.from) && group.includes(edge.to));
+  if (index >= 0) return palette[index % palette.length];
+  return palette[(edge.from.length + edge.to.length) % palette.length];
+}
+ATLAS.nodes.forEach((node) => {
+  const membership = groupsFor(node.id);
+  if (membership.length < 2) return;
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  membership.forEach((index) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.title = "只看这一组";
+    chip.style.background = palette[index % palette.length];
+    chip.addEventListener("click", (event) => {
+      event.stopPropagation();
+      lockedId = node.id;
+      lockedGroup = index;
+      focusGroup(node.id, index);
+    });
+    chips.appendChild(chip);
+  });
+  cards[node.id].querySelector("header").appendChild(chips);
+});
+function groupsFor(id) {
+  return colorGroups.map((group, index) => group.includes(id) ? index : -1).filter((index) => index >= 0);
+}
+function primaryGroup(id) {
+  const indexes = groupsFor(id);
+  if (!indexes.length) return null;
+  if (!Array.isArray(ATLAS.groupModes)) return indexes[0];
+  const rooted = indexes.find((index) => colorGroups[index][0] === id);
+  if (rooted != null) return rooted;
+  const neighbors = new Set();
+  ATLAS.edges.forEach((edge) => {
+    if (edge.from === id) neighbors.add(edge.to);
+    if (edge.to === id) neighbors.add(edge.from);
+  });
+  let best = indexes[0];
+  let bestScore = -1;
+  indexes.forEach((index) => {
+    const group = colorGroups[index];
+    const hits = [...neighbors].filter((other) => group.includes(other)).length;
+    const score = hits * 1000 - group.length;
+    if (score > bestScore) {
+      best = index;
+      bestScore = score;
+    }
+  });
+  return best;
+}
+let activeMembers = null;
+let activeOrder = null;
+function draw(focusIds) {
+  svg.innerHTML = "";
+  const index = lockedGroup;
+  const focused = index == null ? null : colorGroups[index];
+  const color = index == null ? null : palette[index % palette.length];
+  ATLAS.edges.forEach((edge) => {
+    if (!cards[edge.from] || !cards[edge.to]) return;
+    const inFocused = Boolean(focused && focused.includes(edge.from) && focused.includes(edge.to));
+    const on = focused ? inFocused : (!focusIds || (focusIds.has(edge.from) && focusIds.has(edge.to)));
+    const stroke = focused ? (inFocused ? color : "#d5dee8") : edgeGroupColor(edge);
+    const a = point(cards[edge.from], "right");
+    const b = point(cards[edge.to], "left");
+    const mx = (a.x + b.x) / 2;
+    const d = `M ${a.x} ${a.y} L ${mx} ${a.y} L ${mx} ${b.y} L ${b.x} ${b.y}`;
+    addLine(d, stroke, on && (lineFlow || focusIds) ? "flow" : (on ? "still" : "dim"));
+  });
+  const menu = index != null && ATLAS.groupModes && ATLAS.groupModes[index] === "menu";
+  if (focusIds && activeOrder && index != null && !menu) drawReadHops(activeOrder, color);
+}
+function drawReadHops(order, color) {
+  for (let i = 0; i < order.length - 1; i++) {
+    const from = cards[order[i]];
+    const to = cards[order[i + 1]];
+    if (!from || !to) continue;
+    const ax = parseFloat(from.style.left);
+    const bx = parseFloat(to.style.left);
+    if (Math.abs(ax - bx) > 30) continue;
+    const ay = parseFloat(from.style.top) + from.offsetHeight / 2;
+    const by = parseFloat(to.style.top) + to.offsetHeight / 2;
+    const rail = Math.min(ax, bx) - 18;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("class", "read");
+    path.setAttribute("stroke", color);
+    path.setAttribute("d", `M ${ax} ${ay} L ${rail} ${ay} L ${rail} ${by} L ${bx - 1} ${by}`);
+    path.setAttribute("marker-end", "url(#" + arrowMarker(color) + ")");
+    svg.appendChild(path);
+  }
+}
+function related(id) {
+  return ATLAS.edges.filter((e) => e.from === id || e.to === id).map((e) => ({
+    id: e.from === id ? e.to : e.from,
+    dir: e.from === id ? "接下来看" : "从这里来",
+    why: e.why
+  })).filter((item) => byId[item.id]);
+}
+function component(id) {
+  const seen = new Set([id]);
+  const queue = [id];
+  while (queue.length) {
+    const cur = queue.pop();
+    related(cur).forEach((item) => {
+      if (seen.has(item.id)) return;
+      seen.add(item.id);
+      queue.push(item.id);
+    });
+  }
+  return seen;
+}
+const routes = [
+  ["doc-01", "setup-pstack", "poteto-mode", "play-feature", "create-verification-skill", "maintain-verification-skill", "principle-prove-it-works"],
+  ["doc-05", "no-comments", "comment-sicko", "how", "why"],
+  ["architect", "principle-boundary-discipline", "principle-type-system-discipline", "correct", "principle-encode-lessons-in-structure"],
+  ["doc-07", "swarm", "arena", "benny-setup", "benny-triage", "benny-fix", "control-ui"]
+];
+const routeNames = ["安装到验证", "清注释", "代码约束", "夜间并行"];
+let routeIndex = 0;
+function showRoute(index) {
+  routeIndex = (index + routes.length) % routes.length;
+  const ids = routes[routeIndex].filter((id) => cards[id]);
+  const routeName = document.getElementById("route-name");
+  if (routeName) routeName.textContent = "当前线路：" + routeNames[routeIndex];
+  document.querySelectorAll(".card").forEach((el) => { el.hidden = true; el.classList.remove("is-on", "is-next"); });
+  ids.forEach((id, i) => {
+    const el = cards[id];
+    el.hidden = false;
+    el.style.left = (36 + i * 320) + "px";
+    el.style.top = "72px";
+  });
+  canvas.style.width = (36 + ids.length * 320) + "px";
+  canvas.style.height = "220px";
+  svg.setAttribute("width", canvas.style.width);
+  svg.setAttribute("height", canvas.style.height);
+  const detail = document.getElementById("detail");
+  if (detail) detail.innerHTML = "";
+  svg.innerHTML = "";
+  ids.slice(0, -1).forEach((id, i) => {
+    const a = point(cards[id], "right");
+    const b = point(cards[ids[i + 1]], "left");
+    addLine(`M ${a.x} ${a.y} L ${b.x} ${b.y}`, palette[routeIndex % palette.length]);
+  });
+}
+function select(id) {
+  const node = byId[id];
+  const group = component(id);
+  const links = related(id);
+  let y = 36;
+  document.querySelectorAll(".card").forEach((el) => {
+    const keep = group.has(el.dataset.id);
+    el.hidden = !keep;
+    el.classList.toggle("is-on", el.dataset.id === id);
+    el.classList.toggle("is-next", links.some((l) => l.id === el.dataset.id));
+    if (keep) {
+      el.style.left = "36px";
+      el.style.top = y + "px";
+      y += 86;
+    }
+  });
+  canvas.style.height = (y + 40) + "px";
+  svg.setAttribute("height", canvas.style.height);
+  const detail = document.getElementById("detail");
+  if (detail) detail.innerHTML = `<div>${node.kind}</div><h2>${node.name}</h2><p class="path">${node.path}</p><p>${node.blurb}</p><p>何时用：${node.when}</p>` + links.map((l) => `<button class="jump" data-jump="${l.id}">${l.dir} · ${byId[l.id].name}<br>${l.why}</button>`).join("");
+  document.querySelectorAll(".jump").forEach((btn) => btn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    select(btn.dataset.jump);
+  }));
+  draw(group);
+}
+function layoutAll() {
+  const adj = Object.fromEntries(ATLAS.nodes.map((n) => [n.id, []]));
+  ATLAS.edges.forEach((e) => {
+    if (!adj[e.from] || !adj[e.to]) return;
+    adj[e.from].push(e.to);
+    adj[e.to].push(e.from);
+  });
+  const seen = new Set();
+  const components = [];
+  ATLAS.nodes.forEach((n) => {
+    if (seen.has(n.id)) return;
+    const queue = [n.id];
+    const comp = [];
+    seen.add(n.id);
+    while (queue.length) {
+      const id = queue.shift();
+      comp.push(id);
+      adj[id].forEach((next) => {
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      });
+    }
+    components.push(comp);
+  });
+  const linked = components.filter((comp) => comp.length > 1);
+  const alone = components.filter((comp) => comp.length === 1).map((comp) => comp[0]);
+  let y = 48;
+  let maxX = 800;
+  svg.innerHTML = "";
+  linked.forEach((comp, index) => {
+    const start = comp.slice().sort((a, b) => adj[b].length - adj[a].length)[0];
+    const order = [];
+    const walked = new Set([start]);
+    const queue = [start];
+    while (queue.length) {
+      const id = queue.shift();
+      order.push(id);
+      adj[id].forEach((next) => {
+        if (comp.includes(next) && !walked.has(next)) {
+          walked.add(next);
+          queue.push(next);
+        }
+      });
+    }
+    const color = palette[index % palette.length];
+    order.forEach((id, i) => {
+      const el = cards[id];
+      el.hidden = false;
+      el.style.left = (36 + i * 300) + "px";
+      el.style.top = y + "px";
+      maxX = Math.max(maxX, 36 + (i + 1) * 300);
+    });
+    order.slice(0, -1).forEach((id, i) => {
+      const a = point(cards[id], "right");
+      const b = point(cards[order[i + 1]], "left");
+      addLine(`M ${a.x} ${a.y} L ${b.x} ${b.y}`, color);
+    });
+    y += 150;
+  });
+  const byKind = {};
+  alone.forEach((id) => {
+    const kind = byId[id].kind;
+    byKind[kind] = byKind[kind] || [];
+    byKind[kind].push(id);
+  });
+  Object.values(byKind).forEach((ids) => {
+    ids.forEach((id, i) => {
+      const el = cards[id];
+      el.hidden = false;
+      el.style.left = (36 + i * 300) + "px";
+      el.style.top = y + "px";
+      maxX = Math.max(maxX, 36 + (i + 1) * 300);
+    });
+    y += 150;
+  });
+  canvas.style.width = maxX + "px";
+  canvas.style.height = (y + 40) + "px";
+  svg.setAttribute("width", canvas.style.width);
+  svg.setAttribute("height", canvas.style.height);
+}
+function renderMarkdown(source) {
+  const esc = (s) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const inline = (s) => esc(s)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="doc-link">$1</span>')
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  const lines = source.replaceAll("\r\n", "\n").split("\n");
+  const out = [];
+  let para = [];
+  let list = [];
+  let code = [];
+  let inCode = false;
+  const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+  const flushList = () => { if (list.length) { out.push(`<ul>${list.map((item) => `<li>${inline(item)}</li>`).join("")}</ul>`); list = []; } };
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      if (inCode) { out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`); code = []; inCode = false; }
+      else { flushPara(); flushList(); inCode = true; }
+      continue;
+    }
+    if (inCode) { code.push(line); continue; }
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (heading) { flushPara(); flushList(); out.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`); continue; }
+    const item = /^[-*]\s+(.+)$/.exec(line);
+    if (item) { flushPara(); list.push(item[1]); continue; }
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    flushList();
+    para.push(line.trim());
+  }
+  flushPara();
+  flushList();
+  if (inCode) out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
+  return out.join("");
+}
+function closePopup() {
+  document.getElementById("popup").classList.remove("open");
+}
+document.getElementById("pop-close").addEventListener("click", closePopup);
+document.getElementById("pop-x").addEventListener("click", closePopup);
+document.getElementById("popup").addEventListener("click", (event) => {
+  if (event.target.id === "popup") closePopup();
+});
+const popupPage = document.querySelector("#popup .page");
+const popupBar = document.getElementById("pop-bar");
+let popupBarTimer = 0;
+popupPage.addEventListener("scroll", () => {
+  const range = popupPage.scrollHeight - popupPage.clientHeight;
+  if (range <= 0) {
+    popupBar.style.opacity = "0";
+    return;
+  }
+  const height = Math.max(24, popupPage.clientHeight * popupPage.clientHeight / popupPage.scrollHeight);
+  popupBar.style.height = height + "px";
+  popupBar.style.top = (popupPage.scrollTop * (popupPage.clientHeight - height) / range) + "px";
+  popupBar.style.opacity = "1";
+  clearTimeout(popupBarTimer);
+  popupBarTimer = setTimeout(() => { popupBar.style.opacity = "0"; }, 700);
+});
+function docNumber(id) {
+  const match = /·\s*(\d+)/.exec(byId[id].name);
+  return match ? Number(match[1]) : null;
+}
+function cardPos(id) {
+  const el = cards[id];
+  return [parseFloat(el.style.top), parseFloat(el.style.left)];
+}
+function readingOrder(groupIndex) {
+  const ids = colorGroups[groupIndex].filter((id) => cards[id]);
+  const member = new Set(ids);
+  const outs = Object.fromEntries(ids.map((id) => [id, []]));
+  const incoming = Object.fromEntries(ids.map((id) => [id, 0]));
+  ATLAS.edges.forEach((edge) => {
+    if (!member.has(edge.from) || !member.has(edge.to) || edge.from === edge.to) return;
+    if (outs[edge.from].includes(edge.to)) return;
+    outs[edge.from].push(edge.to);
+    incoming[edge.to] += 1;
+  });
+  const byPos = (a, b) => cardPos(a)[0] - cardPos(b)[0] || cardPos(a)[1] - cardPos(b)[1];
+  ids.forEach((id) => outs[id].sort(byPos));
+  const placed = new Set();
+  const order = [];
+  const place = (id) => {
+    if (placed.has(id)) return;
+    placed.add(id);
+    order.push(id);
+  };
+  ids.filter((id) => docNumber(id) != null).sort((a, b) => docNumber(a) - docNumber(b) || byPos(a, b)).forEach(place);
+  ids.filter((id) => incoming[id] === 0 && docNumber(id) == null).sort(byPos).forEach(place);
+  const queue = order.slice();
+  while (queue.length) {
+    const id = queue.shift();
+    outs[id].forEach((to) => {
+      if (placed.has(to)) return;
+      place(to);
+      queue.push(to);
+    });
+  }
+  let guard = 0;
+  while (placed.size < ids.length && guard < ids.length + 2) {
+    guard += 1;
+    const rest = ids.filter((id) => !placed.has(id)).sort(byPos);
+    place(rest[0]);
+    const pending = [rest[0]];
+    while (pending.length) {
+      const id = pending.shift();
+      outs[id].forEach((to) => {
+        if (placed.has(to)) return;
+        place(to);
+        pending.push(to);
+      });
+    }
+  }
+  return order;
+}
+function directionMark(fromId, toId) {
+  const a = cardPos(fromId);
+  const b = cardPos(toId);
+  const dx = b[1] - a[1];
+  const dy = b[0] - a[0];
+  if (Math.abs(dx) < 80) return dy >= 0 ? "↓" : "↑";
+  if (Math.abs(dy) < 80) return dx >= 0 ? "→" : "←";
+  if (dx >= 0) return dy >= 0 ? "↘" : "↗";
+  return dy >= 0 ? "↙" : "↖";
+}
+function hideTip() {
+  document.getElementById("card-tip").classList.remove("show");
+}
+function showTip(el) {
+  if (dragging || panning || el.dataset.truncated !== "1") return;
+  const node = byId[el.dataset.id];
+  const tip = document.getElementById("card-tip");
+  tip.querySelector("strong").textContent = node.name;
+  tip.querySelector("span").textContent = node.blurb;
+  tip.classList.add("show");
+  const rect = el.getBoundingClientRect();
+  const tipRect = tip.getBoundingClientRect();
+  let left = rect.right + 14;
+  let top = rect.top + 12;
+  let place = "right";
+  if (left + tipRect.width > window.innerWidth - 8) {
+    left = rect.left - tipRect.width - 14;
+    place = "left";
+  }
+  if (left < 8) {
+    left = Math.max(8, Math.min(rect.left, window.innerWidth - tipRect.width - 8));
+    top = rect.top - tipRect.height - 12;
+    place = "above";
+    if (top < 8) {
+      top = rect.bottom + 12;
+      place = "below";
+    }
+  }
+  top = Math.max(8, Math.min(top, window.innerHeight - tipRect.height - 8));
+  tip.style.left = left + "px";
+  tip.style.top = top + "px";
+  tip.dataset.place = place;
+}
+function clearSteps() {
+  activeOrder = null;
+  document.querySelectorAll(".step, .next").forEach((el) => el.remove());
+  document.querySelectorAll(".card").forEach((card) => {
+    card.classList.remove("is-start", "is-next");
+    card.style.outlineColor = "";
+    card.style.removeProperty("--step");
+  });
+}
+function showSteps(groupIndex, memberIds) {
+  clearSteps();
+  if (groupIndex == null && !memberIds) return;
+  const order = memberIds || readingOrder(groupIndex);
+  activeOrder = order;
+  const color = palette[(groupIndex == null ? 0 : groupIndex) % palette.length];
+  const menu = groupIndex != null && ATLAS.groupModes && ATLAS.groupModes[groupIndex] === "menu";
+  order.forEach((id, index) => {
+    const card = cards[id];
+    card.style.setProperty("--step", color);
+    card.classList.toggle("is-start", index === 0);
+    if (!menu && index === 1 && id !== lockedId) {
+      card.classList.add("is-next");
+      card.style.outlineColor = color;
+    }
+    const badge = document.createElement("div");
+    badge.className = "step" + (index === 0 ? " start" : "");
+    badge.textContent = index === 0 ? "1 先看" : menu ? "可看" : index === 1 ? "2 下一步" : String(index + 1);
+    badge.style.background = color;
+    card.appendChild(badge);
+    const hint = document.createElement("div");
+    hint.className = "next";
+    hint.style.color = color;
+    if (menu && index === 0) {
+      hint.textContent = "这些都可以看，没有先后";
+    } else if (!menu && index < order.length - 1) {
+      const nextId = order[index + 1];
+      hint.textContent = `${directionMark(id, nextId)} 接着看 ${index + 2} · ${byId[nextId].name}`;
+      hint.title = byId[nextId].name;
+    } else {
+      hint.textContent = menu ? "与其他说明并列" : "这一组看到这里";
+    }
+    card.appendChild(hint);
+  });
+}
+function linkedMembers(id) {
+  const members = new Set([id]);
+  ATLAS.edges.forEach((edge) => {
+    if (edge.from === id && cards[edge.to]) members.add(edge.to);
+    if (edge.to === id && cards[edge.from]) members.add(edge.from);
+  });
+  return members;
+}
+function focusGroup(id, groupIndex) {
+  const index = groupIndex == null ? primaryGroup(id) : groupIndex;
+  lockedGroup = index == null ? null : index;
+  const members = index == null ? new Set([id]) : new Set(colorGroups[index]);
+  activeMembers = members;
+  document.querySelectorAll(".card").forEach((card) => {
+    const selected = card.dataset.id === id;
+    card.classList.toggle("is-on", selected);
+    card.style.outlineColor = selected && index != null ? palette[index % palette.length] : "";
+    card.classList.toggle("dim", !members.has(card.dataset.id));
+  });
+  showSteps(index);
+  draw(members);
+  if (focusedKind) showColumnFrame(focusedKind);
+}
+let lockedId = null;
+let lockedGroup = null;
+document.querySelectorAll(".card").forEach((el) => {
+  el.addEventListener("pointerenter", () => showTip(el));
+  el.addEventListener("pointerleave", hideTip);
+  el.addEventListener("click", (event) => {
+    hideTip();
+    if (event.target.closest(".chips")) return;
+    event.stopPropagation();
+    if (dragMoved || gestureMoved) {
+      dragMoved = false;
+      gestureMoved = false;
+      return;
+    }
+    const sameCard = lockedId === el.dataset.id;
+    if (!sameCard) {
+      lockedId = el.dataset.id;
+      lockedGroup = primaryGroup(el.dataset.id);
+      focusGroup(lockedId, lockedGroup);
+      return;
+    }
+    openPopup(el.dataset.id);
+  });
+});
+function openPopup(id) {
+  const node = byId[id];
+  const links = related(id);
+  document.getElementById("pop-kind").textContent = node.kind;
+  document.getElementById("pop-name").textContent = node.name;
+  document.getElementById("pop-path").textContent = node.path;
+  document.getElementById("pop-blurb").textContent = node.blurb;
+  document.getElementById("pop-when").textContent = "何时用：" + node.when;
+  document.getElementById("pop-next").innerHTML = links.map((l) => `<button class="jump" data-jump="${l.id}">${l.dir} · ${byId[l.id].name}：${l.why}</button>`).join("");
+  document.querySelectorAll("#pop-next .jump").forEach((btn) => btn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    lockedId = btn.dataset.jump;
+    lockedGroup = primaryGroup(btn.dataset.jump);
+    focusGroup(lockedId, lockedGroup);
+    openPopup(btn.dataset.jump);
+  }));
+  document.getElementById("pop-body").innerHTML = node.body ? renderMarkdown(node.body) : "";
+  document.getElementById("popup").classList.add("open");
+}
+const viewport = document.getElementById("viewport");
+let panning = false;
+let panX = 0;
+let panY = 0;
+let panLeft = 0;
+let panTop = 0;
+let downX = 0;
+let downY = 0;
+let dragging = null;
+let dragMoved = false;
+let gestureMoved = false;
+let selectionAtDown = "";
+function clearTextSelection() {
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed) selection.removeAllRanges();
+}
+viewport.addEventListener("selectstart", (event) => event.preventDefault());
+viewport.addEventListener("pointerdown", (event) => {
+  gestureMoved = false;
+  downX = event.clientX;
+  downY = event.clientY;
+  if (event.target.closest(".card")) {
+    selectionAtDown = "";
+    return;
+  }
+  selectionAtDown = window.getSelection()?.toString() || "";
+  panning = true;
+  panX = event.clientX;
+  panY = event.clientY;
+  panLeft = viewport.scrollLeft;
+  panTop = viewport.scrollTop;
+});
+window.addEventListener("pointermove", (event) => {
+  if (panning || dragging) clearTextSelection();
+  if ((panning || dragging) && !gestureMoved) {
+    const dx = event.clientX - downX;
+    const dy = event.clientY - downY;
+    if (dx * dx + dy * dy > 16) gestureMoved = true;
+  }
+  if (panning && gestureMoved) {
+    viewport.scrollLeft = panLeft - (event.clientX - panX);
+    viewport.scrollTop = panTop - (event.clientY - panY);
+  }
+  if (!dragging || !gestureMoved) return;
+  dragMoved = true;
+  const point = canvasPoint(event);
+  dragging.style.left = (point.x - dragOffsetX) + "px";
+  dragging.style.top = (point.y - dragOffsetY) + "px";
+  draw(activeMembers);
+});
+window.addEventListener("pointerup", () => {
+  if (panning || dragging || gestureMoved) clearTextSelection();
+  panning = false;
+  dragging = null;
+  if (focusedKind) showColumnFrame(focusedKind);
+});
+function canvasPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom };
+}
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+document.querySelectorAll(".card").forEach((el) => {
+  el.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".chips")) return;
+    hideTip();
+    dragging = el;
+    dragMoved = false;
+    const point = canvasPoint(event);
+    dragOffsetX = point.x - parseFloat(el.style.left);
+    dragOffsetY = point.y - parseFloat(el.style.top);
+  });
+});
+document.getElementById("dock-restore").addEventListener("click", () => {
+  document.querySelectorAll(".card").forEach((el) => {
+    el.style.left = el.dataset.homeX;
+    el.style.top = el.dataset.homeY;
+    el.classList.remove("is-on", "dim");
+  });
+  zoom = 1;
+  canvas.style.transform = "scale(1)";
+  syncStage();
+  document.getElementById("zoom-label").textContent = "100%";
+  document.getElementById("radar").classList.remove("open");
+  setViewMode("map");
+  viewport.scrollTo(padX, 0);
+  lockedId = null;
+  lockedGroup = null;
+  activeMembers = null;
+  clearSteps();
+  clearColumnFrame();
+  hideTip();
+  draw(null);
+});
+viewport.addEventListener("scroll", hideTip);
+document.getElementById("viewport").addEventListener("click", (event) => {
+  if (gestureMoved || dragMoved || selectionAtDown) {
+    gestureMoved = false;
+    dragMoved = false;
+    selectionAtDown = "";
+    clearTextSelection();
+    return;
+  }
+  if (event.target.closest(".card")) return;
+  lockedId = null;
+  lockedGroup = null;
+  activeMembers = null;
+  document.querySelectorAll(".card").forEach((card) => card.classList.remove("is-on", "dim"));
+  clearSteps();
+  clearColumnFrame();
+  draw(null);
+});
+let lineFlow = false;
+draw(null);
+let viewMode = "map";
+function syncDockHighlight() {
+  const radarOpen = document.getElementById("radar").classList.contains("open");
+  document.querySelectorAll("#dock [data-mode]").forEach((button) => {
+    const on = button.dataset.mode === "map" ? radarOpen : viewMode === button.dataset.mode;
+    button.classList.toggle("is-on", on);
+  });
+}
+function setViewMode(mode) {
+  viewMode = mode;
+  syncDockHighlight();
+  document.querySelectorAll(".card.mode-dim").forEach((el) => el.classList.remove("mode-dim"));
+  if (mode === "path") {
+    const linked = new Set();
+    ATLAS.edges.forEach((edge) => { linked.add(edge.from); linked.add(edge.to); });
+    document.querySelectorAll(".card").forEach((el) => {
+      if (!linked.has(el.dataset.id)) el.classList.add("mode-dim");
+    });
+  }
+}
+function applyZoom(next) {
+  const view = document.getElementById("viewport");
+  const prev = zoom;
+  zoom = Math.min(2, Math.max(0.5, Math.round(next * 10) / 10));
+  const ax = view.clientWidth / 2;
+  const ay = view.clientHeight / 2;
+  const cx = (view.scrollLeft + ax) / prev;
+  const cy = (view.scrollTop + ay) / prev;
+  canvas.style.transform = `scale(${zoom})`;
+  syncStage();
+  view.scrollLeft = cx * zoom - ax;
+  view.scrollTop = cy * zoom - ay;
+  document.getElementById("zoom-label").textContent = Math.round(zoom * 100) + "%";
+}
+function openDockPop(kind) {
+  const pop = document.getElementById("dock-pop");
+  const search = document.getElementById("q");
+  if (pop.dataset.kind === kind && pop.classList.contains("open")) {
+    pop.classList.remove("open");
+    return;
+  }
+  pop.dataset.kind = kind;
+  pop.classList.add("open");
+  const note = pop.querySelector("p");
+  if (note) note.hidden = kind !== "help";
+  search.hidden = kind !== "search";
+  if (kind === "search") search.focus();
+}
+let radarLayout = null;
+function radarSpec() {
+  const used = activeCols();
+  const groups = used.map((kind) => ATLAS.nodes.filter((node) => node.kind === kind && cards[node.id]));
+  const colCount = Math.max(1, groups.length);
+  const stack = Math.max(1, ...groups.map((group) => group.length));
+  const colGap = 6;
+  const rowGap = 3;
+  const nodeW = 12;
+  const nodeH = 5;
+  const pad = 10;
+  return {
+    groups,
+    colGap,
+    rowGap,
+    nodeW,
+    nodeH,
+    pad,
+    mapW: pad * 2 + colCount * nodeW + Math.max(0, colCount - 1) * colGap,
+    mapH: pad * 2 + stack * nodeH + Math.max(0, stack - 1) * rowGap
+  };
+}
+function paintRadar() {
+  const spec = radarSpec();
+  const radar = document.getElementById("radar");
+  const map = document.getElementById("radar-map");
+  radar.style.width = Math.round(spec.mapW + 20) + "px";
+  map.style.height = Math.round(spec.mapH) + "px";
+  map.querySelectorAll(".radar-node").forEach((node) => node.remove());
+  const nodes = {};
+  spec.groups.forEach((members, column) => {
+    members.forEach((node, row) => {
+      const tone = tones[node.kind] || tones["根目录"];
+      const mark = document.createElement("button");
+      mark.type = "button";
+      mark.className = "radar-node";
+      mark.dataset.id = node.id;
+      mark.title = node.name;
+      const x = spec.pad + column * (spec.nodeW + spec.colGap);
+      const y = spec.pad + row * (spec.nodeH + spec.rowGap);
+      mark.style.left = x + "px";
+      mark.style.top = y + "px";
+      mark.style.width = spec.nodeW + "px";
+      mark.style.height = spec.nodeH + "px";
+      mark.style.background = tone.accent;
+      nodes[node.id] = { x, y, w: spec.nodeW, h: spec.nodeH };
+      map.appendChild(mark);
+    });
+  });
+  const els = Object.values(cards);
+  radarLayout = {
+    ...spec,
+    nodes,
+    contentLeft: Math.min(...els.map((el) => parseFloat(el.style.left))),
+    contentTop: Math.min(...els.map((el) => parseFloat(el.style.top))),
+    contentWidth: Math.max(...els.map((el) => parseFloat(el.style.left) + el.offsetWidth)) - Math.min(...els.map((el) => parseFloat(el.style.left))),
+    contentHeight: Math.max(...els.map((el) => parseFloat(el.style.top) + el.offsetHeight)) - Math.min(...els.map((el) => parseFloat(el.style.top)))
+  };
+  paintRadarView();
+}
+function paintRadarView() {
+  const radar = document.getElementById("radar");
+  const port = document.getElementById("radar-view");
+  if (!radar.classList.contains("open") || !radarLayout) return;
+  const view = document.getElementById("viewport");
+  const viewLeft = view.scrollLeft / zoom;
+  const viewTop = view.scrollTop / zoom;
+  const viewRight = viewLeft + view.clientWidth / zoom;
+  const viewBottom = viewTop + view.clientHeight / zoom;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  ATLAS.nodes.forEach((node) => {
+    const el = cards[node.id];
+    const box = radarLayout.nodes[node.id];
+    if (!el || !box) return;
+    const left = parseFloat(el.style.left);
+    const top = parseFloat(el.style.top);
+    if (left + el.offsetWidth < viewLeft || left > viewRight || top + el.offsetHeight < viewTop || top > viewBottom) return;
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.w);
+    maxY = Math.max(maxY, box.y + box.h);
+  });
+  if (!Number.isFinite(minX)) {
+    port.style.display = "none";
+    return;
+  }
+  const bleed = 4;
+  port.style.display = "block";
+  port.style.left = (minX - bleed) + "px";
+  port.style.top = (minY - bleed) + "px";
+  port.style.width = (maxX - minX + bleed * 2) + "px";
+  port.style.height = (maxY - minY + bleed * 2) + "px";
+}
+function jumpToCard(id) {
+  const el = cards[id];
+  const view = document.getElementById("viewport");
+  view.scrollTo({
+    left: Math.max(0, parseFloat(el.style.left) * zoom + el.offsetWidth * zoom / 2 - view.clientWidth / 2),
+    top: Math.max(0, parseFloat(el.style.top) * zoom - 36),
+    behavior: "smooth"
+  });
+  document.querySelectorAll(".card.is-on").forEach((card) => card.classList.remove("is-on"));
+  el.classList.add("is-on");
+}
+function toggleRadar() {
+  const radar = document.getElementById("radar");
+  const opening = !radar.classList.contains("open");
+  radar.classList.toggle("open", opening);
+  if (opening) paintRadar();
+}
+document.querySelectorAll("#dock [data-mode]").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.getElementById("dock-pop").classList.remove("open");
+    if (button.dataset.mode === "map") {
+      if (viewMode !== "map") setViewMode("map");
+      toggleRadar();
+      syncDockHighlight();
+      return;
+    }
+    document.getElementById("radar").classList.remove("open");
+    if (button.dataset.mode === "path" && viewMode === "path") {
+      lineFlow = false;
+      setViewMode("map");
+      draw(activeMembers);
+      return;
+    }
+    lineFlow = button.dataset.mode === "path";
+    setViewMode(button.dataset.mode);
+    draw(activeMembers);
+  });
+});
+document.getElementById("radar-map").addEventListener("pointerdown", (event) => {
+  const node = event.target.closest(".radar-node");
+  const view = document.getElementById("viewport");
+  const layout = radarLayout;
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startLeft = view.scrollLeft;
+  const startTop = view.scrollTop;
+  const scaleX = layout.contentWidth / Math.max(1, layout.mapW - layout.pad * 2);
+  const scaleY = layout.contentHeight / Math.max(1, layout.mapH - layout.pad * 2);
+  let moved = false;
+  function move(e) {
+    if ((e.clientX - startX) ** 2 + (e.clientY - startY) ** 2 > 16) moved = true;
+    if (!moved) return;
+    view.scrollLeft = startLeft + (e.clientX - startX) * scaleX * zoom;
+    view.scrollTop = startTop + (e.clientY - startY) * scaleY * zoom;
+  }
+  function up() {
+    if (!moved && node) jumpToCard(node.dataset.id);
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+  }
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+});
+viewport.addEventListener("scroll", paintRadarView);
+document.getElementById("dock-search").addEventListener("click", () => openDockPop("search"));
+document.getElementById("dock-help").addEventListener("click", () => {
+  const pop = document.getElementById("dock-pop");
+  if (pop.dataset.kind === "help" && pop.classList.contains("open")) {
+    pop.classList.remove("open");
+    return;
+  }
+  pop.dataset.kind = "help";
+  pop.classList.add("open");
+  document.getElementById("q").hidden = true;
+  const existing = pop.querySelector("p");
+  if (existing) existing.hidden = false;
+  let note = pop.querySelector("p");
+  if (!note) {
+    note = document.createElement("p");
+    note.style.margin = "0";
+    pop.appendChild(note);
+  }
+  note.textContent = "路径只留下有连线的卡片。地图打开雷达。搜索按名称过滤。加减改变缩放。弯箭头回到初始位置。";
+});
+document.getElementById("zoom-out").addEventListener("click", () => applyZoom(zoom - 0.1));
+document.getElementById("zoom-in").addEventListener("click", () => applyZoom(zoom + 0.1));
+document.getElementById("q").addEventListener("input", (event) => {
+  const q = event.target.value.trim().toLowerCase();
+  document.querySelectorAll(".card").forEach((el) => {
+    el.classList.toggle("dim", Boolean(q) && !el.textContent.toLowerCase().includes(q));
+  });
+});
+</script>
+</body>
+</html>
