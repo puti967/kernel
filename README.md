@@ -4,6 +4,8 @@ Visualize an agent skill, or any unfamiliar document set, as architecture cards.
 
 You do not need to guess the outline. A citation in the text is a connection. A file with no citation is still its own card.
 
+![Kernel card map](docs/preview.png)
+
 ## Who it is for
 
 Use Kernel when you open someone else's agent skill, `SKILL.md`, or a folder of docs and do not know the reading order.
@@ -35,13 +37,14 @@ Windows Command Prompt:
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://raw.githubusercontent.com/puti967/kernel/main/install.ps1)"
 ```
 
-The same skill is installed for Claude Code, Codex, Cursor, and Grok. Open a new chat in any of them, then:
+The installer puts the same skill on Claude Code, Codex, Cursor, and Grok. Open a new chat, then run one command. Kernel prints a `page` path, writes that HTML file, and opens the card map.
 
-```text
-/kernel /path/to/skill
-```
+- Claude Code: `/kernel /path/to/skill`
+- Codex: `/kernel /path/to/skill`
+- Cursor: `/kernel /path/to/skill`
+- Grok: `/kernel /path/to/skill`
 
-Replace `/path/to/skill` with the skill directory. Kernel writes `pages/<name>/index.html` and opens it.
+Replace `/path/to/skill` with the skill directory.
 
 A directory is a skill only when it has `SKILL.md` with `name` and `description`. Otherwise Kernel stops and does not draw a map.
 
