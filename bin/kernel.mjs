@@ -4,6 +4,18 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { keepFile, listSkillFiles } from "./atlas-rules.mjs";
 
+function openPage(page) {
+  try {
+    if (process.platform === "win32") {
+      execFileSync("cmd", ["/c", "start", "", page], { stdio: "ignore", windowsHide: true });
+      return;
+    }
+    execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [page], { stdio: "inherit" });
+  } catch {
+    console.error("页面已生成，请手动打开：" + page);
+  }
+}
+
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const args = process.argv.slice(2);
 const source = args.find((arg) => !arg.startsWith("--"));
@@ -283,4 +295,4 @@ fs.writeFileSync(path.join(pageDir, "atlas-data.js"), "window.ATLAS = " + JSON.s
 fs.copyFileSync(path.join(root, "viewer", "index.html"), path.join(pageDir, "index.html"));
 const page = path.join(pageDir, "index.html");
 console.log(JSON.stringify({ page, nodes: nodes.length, edges: edges.length, groups: groups.length, columns: columns.map((column) => column.id) }, null, 2));
-if (shouldOpen) execFileSync("open", [page], { stdio: "inherit" });
+if (shouldOpen) openPage(page);

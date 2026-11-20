@@ -21,10 +21,18 @@ It is a local Node.js tool. It writes one HTML page. It does not call a model to
 
 ## Quick start
 
-Requires Node.js 18 or newer. One command installs the skill:
+Requires Node.js 18 or newer. One command installs the skill.
+
+macOS or Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/puti967/kernel/main/install.sh | bash
+```
+
+Windows Command Prompt:
+
+```cmd
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://raw.githubusercontent.com/puti967/kernel/main/install.ps1)"
 ```
 
 The same skill is installed for Claude Code, Codex, Cursor, and Grok. Open a new chat in any of them, then:

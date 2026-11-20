@@ -47,7 +47,13 @@ Generate the card map and open it. Do not redraw the page.
 
 ## Command
 
-The user must name a skill directory. From any working directory:
+The user must name a skill directory. On Windows, from any working directory:
+
+```powershell
+node "$env:USERPROFILE\.kernel\bin\kernel.mjs" <that directory>
+```
+
+On macOS or Linux:
 
 ```bash
 node "$HOME/.kernel/bin/kernel.mjs" <that directory>
