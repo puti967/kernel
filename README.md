@@ -21,17 +21,19 @@ It is a local Node.js tool. It writes one HTML page. It does not call a model to
 
 ## Quick start
 
-Requires Node.js 18 or newer.
+Requires Node.js 18 or newer. One command installs the skill:
 
 ```bash
-git clone https://github.com/puti967/kernel.git
-cd kernel
-node bin/kernel.mjs /path/to/skill
+curl -fsSL https://raw.githubusercontent.com/puti967/kernel/main/install.sh | bash
 ```
 
-The command prints a `page` path. Open that `pages/<name>/index.html` file.
+Open a new session, then:
 
-Pass `--no-open` when you do not want the page to open automatically.
+```text
+/kernel /path/to/skill
+```
+
+Replace `/path/to/skill` with the skill directory. Kernel writes `pages/<name>/index.html` and opens it.
 
 A directory is a skill only when it has `SKILL.md` with `name` and `description`. Otherwise Kernel stops and does not draw a map.
 
