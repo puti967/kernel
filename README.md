@@ -27,7 +27,7 @@ Requires Node.js 18 or newer. One command installs the skill:
 curl -fsSL https://raw.githubusercontent.com/puti967/kernel/main/install.sh | bash
 ```
 
-Open a new session, then:
+The same skill is installed for Claude Code, Codex, Cursor, and Grok. Open a new chat in any of them, then:
 
 ```text
 /kernel /path/to/skill

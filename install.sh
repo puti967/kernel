@@ -16,7 +16,7 @@ if [ "$major" -lt 18 ]; then
   exit 1
 fi
 
-mkdir -p "$prefix/bin" "$prefix/viewer" "${HOME}/.grok/skills/kernel" "${HOME}/.agents/skills"
+mkdir -p "$prefix/bin" "$prefix/viewer" "${HOME}/.agents/skills/kernel"
 
 fetch() {
   rel="$1"
@@ -33,10 +33,10 @@ fetch bin/atlas-rules.mjs "$prefix/bin/atlas-rules.mjs"
 fetch viewer/index.html "$prefix/viewer/index.html"
 chmod +x "$prefix/bin/kernel.mjs"
 
-cat > "${HOME}/.grok/skills/kernel/SKILL.md" << 'EOF'
+cat > "${HOME}/.agents/skills/kernel/SKILL.md" << 'EOF'
 ---
 name: kernel
-description: Generate a Kernel card map from a local skill directory and open the viewer. Use when the user runs /kernel or asks to map a skill repository.
+description: Generate a Kernel card map from a local skill directory and open the viewer. Use when the user runs /kernel or asks to map a skill repository. Works in Claude Code, Codex, Cursor, Grok, and other agents that read Agent Skills.
 user-invocable: true
 argument-hint: "[source directory]"
 ---
@@ -66,7 +66,16 @@ The command prints a `page` path. That file must exist and load `atlas-data.js` 
 - Do not replace the generated page with a new design.
 EOF
 
-rm -rf "${HOME}/.agents/skills/kernel"
-ln -s "${HOME}/.grok/skills/kernel" "${HOME}/.agents/skills/kernel"
+skill="${HOME}/.agents/skills/kernel"
+for dir in \
+  "${HOME}/.claude/skills" \
+  "${HOME}/.codex/skills" \
+  "${HOME}/.cursor/skills" \
+  "${HOME}/.grok/skills"
+do
+  mkdir -p "$dir"
+  rm -rf "$dir/kernel"
+  ln -s "$skill" "$dir/kernel"
+done
 
-echo "已安装。新开一个会话后执行：/kernel /path/to/skill"
+echo "已安装。Claude Code、Codex、Cursor、Grok 新开一个对话后执行：/kernel /path/to/skill"
