@@ -4,7 +4,9 @@ Visualize an agent skill, or any unfamiliar document set, as architecture cards.
 
 You do not need to guess the outline. A citation in the text is a connection. A file with no citation is still its own card.
 
-![Kernel card map](docs/preview.png)
+![A selected route marks 1 先看 and 2 下一步, and fades the other group](docs/preview.png)
+
+Select one route. Kernel marks what to read first and what comes next. Cards and lines from the other route fade. The two dots on a card are its other routes.
 
 ## Who it is for
 
